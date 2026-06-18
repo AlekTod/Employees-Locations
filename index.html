@@ -1,1 +1,626 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Locations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #1a1a2e; --mid: #4a4a6a; --faint: #9090b0;
+    --bg: #f5f5fa; --white: #ffffff;
+    --accent: #5b4cdb; --accent-light: #ede9ff; --accent-mid: #8b7ee8;
+    --border: #e0e0ef; --pin: #e84855;
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--ink); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { background: var(--white); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 20px; flex-shrink: 0; z-index: 1000; box-shadow: 0 1px 8px rgba(91,76,219,0.06); }
+  .header-left { display: flex; flex-direction: column; gap: 2px; }
+  h1 { font-size: 18px; font-weight: 600; color: var(--ink); letter-spacing: -0.3px; }
+  .subtitle { font-size: 12px; color: var(--faint); font-family: 'DM Mono', monospace; }
+  .header-controls { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+  .search-wrap { position: relative; }
+  .search-wrap svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+  #search { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 8px 12px 8px 34px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--ink); width: 220px; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+  #search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+  #search::placeholder { color: var(--faint); }
+  .btn { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--white); color: var(--mid); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .btn:hover { background: var(--bg); border-color: var(--accent-mid); color: var(--accent); }
+  .btn.active { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+  .stat-pill { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; padding: 5px 10px; border-radius: 20px; background: var(--accent-light); color: var(--accent); white-space: nowrap; }
+  .main { display: flex; flex: 1; overflow: hidden; }
+  #sidebar { width: 260px; flex-shrink: 0; background: var(--white); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 500; color: var(--faint); text-transform: uppercase; letter-spacing: 0.8px; font-family: 'DM Mono', monospace; }
+  #city-list { overflow-y: auto; flex: 1; }
+  #city-list::-webkit-scrollbar { width: 4px; }
+  #city-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .city-item { padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.1s; gap: 8px; }
+  .city-item:hover { background: var(--bg); }
+  .city-item.active { background: var(--accent-light); }
+  .city-name { font-size: 13px; font-weight: 500; color: var(--ink); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .city-count { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 10px; background: var(--border); color: var(--mid); flex-shrink: 0; }
+  .city-item.active .city-count { background: var(--accent); color: var(--white); }
+  .country-header { padding: 8px 16px 4px; font-size: 10px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 1px; font-family: 'DM Mono', monospace; background: var(--bg); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; }
+  .country-emp-count { font-size: 10px; color: var(--faint); font-family: 'DM Mono', monospace; }
+  .country-header { cursor: pointer; user-select: none; }
+  .country-header:hover { background: var(--border); }
+  .country-chevron { margin-left: 6px; transition: transform 0.2s; display: inline-block; font-size: 10px; color: var(--faint); }
+  .country-header.open .country-chevron { transform: rotate(90deg); }
+  .country-cities { display: none; }
+  .country-cities.open { display: block; }
+  .no-results { padding: 24px 16px; font-size: 13px; color: var(--faint); text-align: center; }
+  #map { flex: 1; }
+  .leaflet-popup-content-wrapper { border-radius: 10px; box-shadow: 0 4px 20px rgba(26,26,46,0.15); border: 1px solid var(--border); font-family: 'DM Sans', sans-serif; padding: 0; overflow: hidden; }
+  .leaflet-popup-content { margin: 0; }
+  .popup-inner { padding: 14px 16px; min-width: 160px; }
+  .popup-city { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+  .popup-badge { display: inline-block; background: var(--accent-light); color: var(--accent); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; font-family: 'DM Mono', monospace; }
+  .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background-color: rgba(91,76,219,0.15) !important; }
+  .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background-color: rgba(91,76,219,0.85) !important; color: white !important; font-family: 'DM Mono', monospace !important; font-weight: 600 !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <h1>Employee Locations</h1>
+    
+  </div>
+  <div class="header-controls">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="search" placeholder="Search city…" autocomplete="off"/>
+    </div>
+    <button class="btn" id="toggle-cluster">Uncluster</button>
+    <button class="btn" id="reset-btn">Reset view</button>
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mid);">
+      <div style="width:12px;height:12px;background:#e84855;border-radius:50% 50% 50% 0;transform:rotate(-45deg);flex-shrink:0;"></div><span>Remote</span>
+      <div style="width:12px;height:12px;background:#5b4cdb;border-radius:50%;flex-shrink:0;margin-left:6px;"></div><span>Remote (clustered)</span>
+      <div style="width:12px;height:12px;background:#1a1a2e;border-radius:3px;flex-shrink:0;margin-left:6px;"></div><span>Office</span>
+    </div>
+    <div class="stat-pill" id="stat">203 cities · 258 employees</div>
+  </div>
+</header>
+<div class="main">
+  <div id="sidebar">
+    <div class="sidebar-header">All Locations</div>
+    <div id="city-list"></div>
+  </div>
+  <div id="map"></div>
+</div>
+<script>
+const LOCATIONS = [
+  {city:"Allerton Bywater",count:1,country:"GBR"},{city:"Bath",count:3,country:"GBR"},{city:"Berks",count:1,country:"GBR"},
+  {city:"Birmingham",count:1,country:"GBR"},{city:"Bitton",count:1,country:"GBR"},{city:"Bournemouth",count:1,country:"GBR"},
+  {city:"Bristol",count:2,country:"GBR"},{city:"Broseley",count:1,country:"GBR"},{city:"Cambridge",count:2,country:"GBR"},
+  {city:"Cambridgeshire",count:1,country:"GBR"},{city:"Cathcart",count:1,country:"GBR"},{city:"Croydon",count:1,country:"GBR"},
+  {city:"Cullompton",count:1,country:"GBR"},{city:"Cumbria",count:1,country:"GBR"},{city:"Cwmbran",count:1,country:"GBR"},
+  {city:"East Sussex",count:2,country:"GBR"},{city:"Edenbridge",count:1,country:"GBR"},{city:"Edinburgh",count:2,country:"GBR"},
+  {city:"Essex",count:2,country:"GBR"},{city:"Farnborough",count:1,country:"GBR"},{city:"Frimley",count:1,country:"GBR"},
+  {city:"Gedling",count:1,country:"GBR"},{city:"Glasgow",count:2,country:"GBR"},{city:"Glenrothes",count:1,country:"GBR"},
+  {city:"Grantham",count:1,country:"GBR"},{city:"Great Cambourne",count:1,country:"GBR"},{city:"Hertfordshire",count:1,country:"GBR"},
+  {city:"Highley",count:1,country:"GBR"},{city:"Hillingdon",count:1,country:"GBR"},{city:"Holbrook",count:1,country:"GBR"},
+  {city:"Inverness",count:1,country:"GBR"},{city:"Keynsham",count:1,country:"GBR"},{city:"Kidderminster",count:1,country:"GBR"},
+  {city:"King's Lynn",count:1,country:"GBR"},{city:"Leamington Spa",count:2,country:"GBR"},{city:"London",count:6,country:"GBR"},
+  {city:"Louth",count:1,country:"GBR"},{city:"Lowestoft",count:1,country:"GBR"},{city:"Manchester",count:1,country:"GBR"},
+  {city:"Newport",count:1,country:"GBR"},{city:"Norfolk",count:1,country:"GBR"},{city:"North Ayrshire",count:1,country:"GBR"},
+  {city:"Nottingham",count:1,country:"GBR"},{city:"Old Stratford",count:1,country:"GBR"},{city:"Oswestry",count:1,country:"GBR"},
+  {city:"Peasmarsh Rye",count:1,country:"GBR"},{city:"Penyffordd",count:1,country:"GBR"},{city:"Plealey",count:1,country:"GBR"},
+  {city:"Poole",count:2,country:"GBR"},{city:"Rainham",count:1,country:"GBR"},{city:"Royal Wootton Basset",count:1,country:"GBR"},
+  {city:"Sale",count:1,country:"GBR"},{city:"Saxmundham",count:1,country:"GBR"},{city:"Shavington",count:1,country:"GBR"},
+  {city:"Sheffield",count:1,country:"GBR"},{city:"Shipdham",count:1,country:"GBR"},{city:"Shrewsbury",count:4,country:"GBR"},
+  {city:"Shropshire",count:2,country:"GBR"},{city:"Sleights",count:1,country:"GBR"},{city:"Southam",count:1,country:"GBR"},
+  {city:"Southampton",count:1,country:"GBR"},{city:"Southend-On-Sea",count:1,country:"GBR"},{city:"Southsea",count:1,country:"GBR"},
+  {city:"Spalding",count:1,country:"GBR"},{city:"St Albans",count:1,country:"GBR"},{city:"Sunningdale Park",count:1,country:"GBR"},
+  {city:"Sutton Coldfield",count:2,country:"GBR"},{city:"Taunton",count:1,country:"GBR"},{city:"Telford",count:3,country:"GBR"},
+  {city:"Torriano Avenue",count:1,country:"GBR"},{city:"Truro",count:1,country:"GBR"},{city:"Welling",count:1,country:"GBR"},
+  {city:"Wellingborough",count:1,country:"GBR"},{city:"Wiltshire",count:1,country:"GBR"},{city:"Wimborne",count:1,country:"GBR"},
+  {city:"Wolverhampton",count:1,country:"GBR"},{city:"Wrexham",count:1,country:"GBR"},{city:"York",count:1,country:"GBR"},{city:"Livingston",count:1,country:"GBR"},
+  {city:"Alcobaça",count:1,country:"PRT"},
+  {city:"Alexandria",count:1,country:"USA"},
+  {city:"Amsterdam",count:1,country:"NLD"},
+  {city:"Ann Arbor",count:1,country:"USA"},
+  {city:"Annandale",count:1,country:"USA"},
+  {city:"Antipolo",count:1,country:"PHL"},
+  {city:"Arroios",count:1,country:"PRT"},
+  {city:"Atlanta",count:1,country:"USA"},
+  {city:"Austin",count:2,country:"USA"},
+  {city:"Aveiro",count:2,country:"PRT"},
+  {city:"Azores",count:1,country:"PRT"},
+  {city:"Baguio",count:2,country:"PHL"},
+  {city:"Barcelona",count:3,country:"ESP"},
+  {city:"Bela Vista",count:1,country:"BRA"},
+  {city:"Borba",count:1,country:"PRT"},
+  {city:"Braga",count:3,country:"PRT"},
+  {city:"Cainta",count:1,country:"PHL"},
+  {city:"Carregosa",count:1,country:"PRT"},
+  {city:"Carrigtwohill",count:1,country:"IRL"},
+  {city:"Cascais",count:1,country:"PRT"},
+  {city:"Centreville",count:1,country:"USA"},
+  {city:"Chapel Hill",count:1,country:"USA"},
+  {city:"Charlotte",count:2,country:"USA"},
+  {city:"Coimbra",count:6,country:"PRT"},
+  {city:"Copenhagen",count:1,country:"DNK"},
+  {city:"Dallas",count:1,country:"USA"},
+  {city:"Denver",count:2,country:"USA"},
+  {city:"Dexter",count:1,country:"USA"},
+  {city:"Digos City",count:1,country:"PHL"},
+  {city:"Dimasalang",count:1,country:"PHL"},
+  {city:"Dnipro",count:1,country:"UKR"},
+  {city:"Doral",count:1,country:"USA"},
+  {city:"Emirate of Umm Al Quwain",count:1,country:"UAE"},
+  {city:"Erie",count:1,country:"USA"},
+  {city:"Esposende",count:1,country:"PRT"},
+  {city:"Fairfax",count:1,country:"USA"},
+  {city:"Fairfax Station",count:1,country:"USA"},
+  {city:"Forestville",count:1,country:"USA"},
+  {city:"Fromental",count:1,country:"FRA"},
+  {city:"Funchal",count:1,country:"PRT"},
+  {city:"Gainesville",count:1,country:"USA"},
+  {city:"Gaithersburg",count:1,country:"USA"},
+  {city:"Glanworth",count:1,country:"IRL"},
+  {city:"Glenfield",count:1,country:"USA"},
+  {city:"Grant Road",count:1,country:"IND"},
+  {city:"Guaynabo",count:1,country:"USA"},
+  {city:"Hamilton",count:1,country:"CAN"},
+  {city:"Helsinki",count:1,country:"FIN"},
+  {city:"Henderson",count:2,country:"USA"},
+  {city:"Henrico",count:1,country:"USA"},
+  {city:"Herndon",count:1,country:"USA"},
+  {city:"Holly Springs",count:1,country:"USA"},
+  {city:"Homestead",count:1,country:"USA"},
+  {city:"Houston",count:2,country:"USA"},
+  {city:"Johnstown",count:1,country:"USA"},
+  {city:"Jouy-en-Josas",count:1,country:"FRA"},
+  {city:"Juarez",count:1,country:"MEX"},
+  {city:"Kalyan-Dombivli",count:1,country:"IND"},
+  {city:"Knoxville",count:1,country:"USA"},
+  {city:"Lagos",count:1,country:"PRT"},
+  {city:"Lapu-Lapu",count:1,country:"PHL"},
+  {city:"Las Pinas",count:1,country:"PHL"},
+  {city:"Leesburg",count:1,country:"USA"},
+  {city:"Leiria",count:1,country:"PRT"},
+  {city:"Liekwegen",count:1,country:"DEU"},
+  {city:"Lilburn",count:1,country:"USA"},
+  {city:"Lovettsville",count:1,country:"USA"},
+  {city:"Lutz",count:2,country:"USA"},
+  {city:"Luxembourg",count:1,country:"LUX"},
+  {city:"Malolos",count:1,country:"PHL"},
+  {city:"Mandaluyong City",count:1,country:"PHL"},
+  {city:"Mansion",count:1,country:"KNA"},
+  {city:"Mariemont",count:1,country:"USA"},
+  {city:"Marina del Rey",count:1,country:"USA"},
+  {city:"Marlborough",count:1,country:"USA"},
+  {city:"McKinney",count:1,country:"USA"},
+  {city:"Menasha",count:1,country:"USA"},
+  {city:"Missouri City",count:1,country:"USA"},
+  {city:"Montalcinello",count:1,country:"ITA"},
+  {city:"Monterrey",count:1,country:"MEX"},
+  {city:"Morgantown",count:1,country:"USA"},
+  {city:"Moscow",count:2,country:"RUS"},
+  {city:"Molnlycke",count:1,country:"SWE"},
+  {city:"New Braunfels",count:1,country:"USA"},
+  {city:"New York",count:2,country:"USA"},
+  {city:"Novi",count:1,country:"USA"},
+  {city:"Oak Lawn",count:1,country:"USA"},
+  {city:"Orem",count:1,country:"USA"},
+  {city:"Parchal",count:1,country:"PRT"},
+  {city:"Paris",count:1,country:"FRA"},
+  {city:"Peniche",count:1,country:"PRT"},
+  {city:"Pielesti",count:1,country:"ROU"},
+  {city:"Pinellas Park",count:1,country:"USA"},
+  {city:"Pittsburgh",count:1,country:"USA"},
+  {city:"Pittsford",count:1,country:"USA"},
+  {city:"Plano",count:1,country:"USA"},
+  {city:"Porto",count:6,country:"PRT"},
+  {city:"Powell",count:1,country:"USA"},
+  {city:"Quezon City",count:2,country:"PHL"},
+  {city:"Richmond",count:1,country:"USA"},
+  {city:"Rio de Mouro",count:1,country:"PRT"},
+  {city:"San Fernando",count:1,country:"PHL"},
+  {city:"Sanborn",count:1,country:"USA"},
+  {city:"Santiago",count:1,country:"DOM"},
+  {city:"Seegehalli",count:1,country:"IND"},
+  {city:"Silver Spring",count:1,country:"USA"},
+  {city:"Smyrna",count:1,country:"USA"},
+  {city:"Somerville",count:1,country:"USA"},
+  {city:"St-Laurent-du-Var",count:1,country:"FRA"},
+  {city:"State College",count:2,country:"USA"},
+  {city:"Stockholm",count:1,country:"SWE"},
+  {city:"Tampa",count:5,country:"USA"},
+  {city:"Tartu",count:1,country:"EST"},
+  {city:"Tucson",count:1,country:"USA"},
+  {city:"Tulsa",count:1,country:"USA"},
+  {city:"Upland",count:1,country:"USA"},
+  {city:"Vila Clementino",count:1,country:"BRA"},
+  {city:"Vizela",count:1,country:"PRT"},
+  {city:"Warszawa",count:1,country:"POL"},
+  {city:"Washington",count:2,country:"USA"},
+  {city:"Waynesboro",count:1,country:"USA"},
+  {city:"Wesley Chapel",count:1,country:"USA"},
+  {city:"Wilmington",count:3,country:"USA"},
+  {city:"Windsor",count:1,country:"CAN"}
+];
+
+const COORDS = {
+  "Allerton Bywater":[53.730,-1.414],"Bath":[51.381,-2.360],"Berks":[51.450,-1.000],
+  "Birmingham":[52.480,-1.898],"Bitton":[51.428,-2.453],"Bournemouth":[50.720,-1.878],
+  "Bristol":[51.454,-2.588],"Broseley":[52.619,-2.490],"Cambridge":[52.205,0.119],
+  "Cambridgeshire":[52.300,0.080],"Cathcart":[55.810,-4.277],"Croydon":[51.376,-0.098],
+  "Cullompton":[50.850,-3.394],"Cumbria":[54.577,-2.797],"Cwmbran":[51.653,-3.002],
+  "East Sussex":[50.908,0.249],"Edenbridge":[51.198,0.064],"Edinburgh":[55.953,-3.189],
+  "Essex":[51.572,0.471],"Farnborough":[51.294,-0.752],"Frimley":[51.315,-0.738],
+  "Gedling":[52.975,-1.070],"Glasgow":[55.864,-4.252],"Glenrothes":[56.200,-3.178],
+  "Grantham":[52.911,-0.640],"Great Cambourne":[52.214,-0.046],"Hertfordshire":[51.810,-0.239],
+  "Highley":[52.435,-2.381],"Hillingdon":[51.545,-0.448],"Holbrook":[51.973,1.270],
+  "Inverness":[57.477,-4.224],"Keynsham":[51.413,-2.496],"Kidderminster":[52.390,-2.249],
+  "King's Lynn":[52.753,0.399],"Leamington Spa":[52.291,-1.536],"London":[51.507,-0.128],
+  "Louth":[53.368,-0.006],"Lowestoft":[52.476,1.754],"Manchester":[53.483,-2.244],
+  "Newport":[51.584,-2.997],"Norfolk":[52.618,0.878],"North Ayrshire":[55.660,-4.760],
+  "Nottingham":[52.954,-1.158],"Old Stratford":[52.065,-0.833],"Oswestry":[52.860,-3.054],
+  "Peasmarsh Rye":[50.964,0.688],"Penyffordd":[53.147,-3.008],"Plealey":[52.639,-2.801],
+  "Poole":[50.714,-1.984],"Rainham":[51.521,0.188],"Royal Wootton Basset":[51.533,-1.900],
+  "Sale":[53.424,-2.322],"Saxmundham":[52.213,1.487],"Shavington":[53.031,-2.428],
+  "Sheffield":[53.381,-1.470],"Shipdham":[52.629,0.887],"Shrewsbury":[52.708,-2.754],
+  "Shropshire":[52.679,-2.642],"Sleights":[54.449,-0.658],"Southam":[52.253,-1.389],
+  "Southampton":[50.909,-1.404],"Southend-On-Sea":[51.546,0.708],"Southsea":[50.784,-1.083],
+  "Spalding":[52.786,-0.153],"St Albans":[51.755,-0.336],"Sunningdale Park":[51.404,-0.662],
+  "Sutton Coldfield":[52.564,-1.822],"Taunton":[51.015,-3.103],"Telford":[52.677,-2.447],
+  "Torriano Avenue":[51.554,-0.138],"Truro":[50.263,-5.051],"Welling":[51.460,0.107],
+  "Wellingborough":[52.302,-0.693],"Wiltshire":[51.349,-1.992],"Wimborne":[50.799,-1.985],
+  "Wolverhampton":[52.586,-2.129],"Wrexham":[53.046,-2.993],"York":[53.958,-1.082],"Livingston":[55.883,-3.516],
+  "Alcobaca":[39.549,-8.981],
+  "Alexandria":[38.8048,-77.0469],
+  "Amsterdam":[52.3676,4.9041],
+  "Ann Arbor":[42.2808,-83.743],
+  "Annandale":[38.8307,-77.1936],
+  "Antipolo":[14.5965,121.1761],
+  "Arroios":[38.7264,-9.1354],
+  "Atlanta":[33.749,-84.388],
+  "Austin":[30.2672,-97.7431],
+  "Aveiro":[40.6443,-8.6455],
+  "Azores":[37.7412,-25.6756],
+  "Baguio":[16.4023,120.596],
+  "Barcelona":[41.3851,2.1734],
+  "Bela Vista":[-23.617,-46.634],
+  "Borba":[38.7975,-7.4503],
+  "Braga":[41.5454,-8.4265],
+  "Cainta":[14.5779,121.1228],
+  "Carregosa":[40.8747,-8.5431],
+  "Carrigtwohill":[51.9104,-8.268],
+  "Cascais":[38.6979,-9.4215],
+  "Centreville":[38.8401,-77.4297],
+  "Chapel Hill":[35.9132,-79.0558],
+  "Charlotte":[35.2271,-80.8431],
+  "Coimbra":[40.2033,-8.4103],
+  "Copenhagen":[55.6761,12.5683],
+  "Dallas":[32.7767,-96.797],
+  "Denver":[39.7392,-104.9903],
+  "Dexter":[42.3375,-83.8863],
+  "Digos City":[6.7498,125.3572],
+  "Dimasalang":[12.2167,123.7167],
+  "Dnipro":[48.4647,35.0462],
+  "Doral":[25.8196,-80.3552],
+  "Emirate of Umm Al Quwain":[25.5647,55.5552],
+  "Erie":[42.1292,-80.0851],
+  "Esposende":[41.5343,-8.781],
+  "Fairfax":[38.8462,-77.3064],
+  "Fairfax Station":[38.7918,-77.3361],
+  "Forestville":[38.851,-76.8769],
+  "Fromental":[46.1667,1.6167],
+  "Funchal":[32.6669,-16.9241],
+  "Gainesville":[29.6516,-82.3248],
+  "Gaithersburg":[39.1434,-77.2014],
+  "Glanworth":[52.143,-8.35],
+  "Glenfield":[40.677,-74.2316],
+  "Grant Road":[18.9647,72.8178],
+  "Guaynabo":[18.3809,-66.1108],
+  "Hamilton":[43.2557,-79.8711],
+  "Helsinki":[60.1699,24.9384],
+  "Henderson":[36.0395,-114.9817],
+  "Henrico":[37.5538,-77.4191],
+  "Herndon":[38.9696,-77.3861],
+  "Holly Springs":[35.6518,-78.8342],
+  "Homestead":[25.4687,-80.4776],
+  "Houston":[29.7604,-95.3698],
+  "Johnstown":[40.3267,-78.9219],
+  "Jouy-en-Josas":[48.7642,2.1681],
+  "Juarez":[31.6904,-106.4245],
+  "Kalyan-Dombivli":[19.2183,73.1285],
+  "Knoxville":[35.9606,-83.9207],
+  "Lagos":[37.1022,-8.6757],
+  "Lapu-Lapu":[10.3103,123.9494],
+  "Las Pinas":[14.45,120.9833],
+  "Leesburg":[39.1157,-77.5636],
+  "Leiria":[39.7436,-8.8071],
+  "Liekwegen":[52.1167,9.1],
+  "Lilburn":[33.8898,-84.143],
+  "Lovettsville":[39.2737,-77.6386],
+  "Lutz":[28.1553,-82.4582],
+  "Luxembourg":[49.6117,6.1319],
+  "Malolos":[14.8527,120.812],
+  "Mandaluyong City":[14.5794,121.0359],
+  "Mansion":[17.3578,-62.783],
+  "Mariemont":[39.1423,-84.3727],
+  "Marina del Rey":[33.9803,-118.4517],
+  "Marlborough":[42.3459,-71.5523],
+  "McKinney":[33.1972,-96.6397],
+  "Menasha":[44.2022,-88.4426],
+  "Missouri City":[29.6185,-95.5377],
+  "Montalcinello":[43.1833,11.1167],
+  "Monterrey":[25.6866,-100.3161],
+  "Morgantown":[39.6295,-79.9559],
+  "Moscow":[55.7558,37.6173],
+  "Molnlycke":[57.6594,12.1161],
+  "New Braunfels":[29.703,-98.1245],
+  "New York":[40.7128,-74.006],
+  "Novi":[42.4801,-83.4755],
+  "Oak Lawn":[41.7197,-87.7479],
+  "Orem":[40.2969,-111.6946],
+  "Parchal":[37.15,-8.5167],
+  "Paris":[48.8566,2.3522],
+  "Peniche":[39.3558,-9.3814],
+  "Pielesti":[44.2167,23.8333],
+  "Pinellas Park":[27.8428,-82.6996],
+  "Pittsburgh":[40.4406,-79.9959],
+  "Pittsford":[43.0887,-77.5197],
+  "Plano":[33.0198,-96.6989],
+  "Porto":[41.1579,-8.6291],
+  "Powell":[40.1578,-82.9924],
+  "Quezon City":[14.676,121.0437],
+  "Richmond":[37.5407,-77.436],
+  "Rio de Mouro":[38.7667,-9.3333],
+  "San Fernando":[15.0268,120.69],
+  "Sanborn":[43.1337,-78.8845],
+  "Santiago":[19.4517,-70.7065],
+  "Seegehalli":[13.0002,77.6966],
+  "Silver Spring":[38.9907,-77.0261],
+  "Smyrna":[33.884,-84.5144],
+  "Somerville":[42.3876,-71.0995],
+  "St-Laurent-du-Var":[43.6667,7.1833],
+  "State College":[40.7934,-77.86],
+  "Stockholm":[59.3293,18.0686],
+  "Tampa":[27.9506,-82.4572],
+  "Tartu":[58.3776,26.729],
+  "Tucson":[32.2226,-110.9747],
+  "Tulsa":[36.154,-95.9928],
+  "Upland":[34.0975,-117.6484],
+  "Vila Clementino":[-23.6006,-46.6395],
+  "Vizela":[41.3833,-8.3],
+  "Warszawa":[52.2297,21.0122],
+  "Washington":[38.9072,-77.0369],
+  "Waynesboro":[38.0687,-78.8895],
+  "Wesley Chapel":[28.2117,-82.3318],
+  "Wilmington":[34.2257,-77.9447],
+  "Windsor":[42.3149,-83.0364]
+};
+
+const map = L.map('map', {worldCopyJump: false, noWrap: true, maxBounds: [[-90,-180],[90,180]], maxBoundsViscosity: 1.0, minZoom: 2}).setView([20,10],2);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; OpenStreetMap contributors &copy; CARTO', maxZoom:18, noWrap:true
+}).addTo(map);
+
+function makeIcon(count) {
+  const s = count>3?36:count>1?30:26;
+  return L.divIcon({
+    html:`<div style="width:${s}px;height:${s}px;background:#e84855;border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(232,72,85,0.35);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(45deg);color:#fff;font-size:10px;font-family:'DM Mono',monospace;font-weight:600;">${count}</span></div>`,
+    className:'',iconSize:[s,s],iconAnchor:[s/2,s],popupAnchor:[0,-s]
+  });
+}
+
+let clustered=true;
+const clusterGroup=L.markerClusterGroup({
+  maxClusterRadius:80,
+  showCoverageOnHover:false,
+  iconCreateFunction: function(cluster){
+    const count = cluster.getChildCount();
+    const size = count >= 50 ? 52 : count >= 20 ? 44 : count >= 10 ? 38 : count >= 5 ? 32 : 26;
+    return L.divIcon({
+      html: '<div style="width:'+size+'px;height:'+size+'px;background:rgba(91,76,219,0.85);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-family:DM Mono,monospace;font-weight:600;font-size:'+(size>38?13:11)+'px;box-shadow:0 2px 8px rgba(91,76,219,0.4);">'+count+'</div>',
+      className: '',
+      iconSize: [size, size]
+    });
+  }
+});
+const rawGroup=L.layerGroup();
+const markers={};
+let activeCity=null;
+
+const invisibleIcon = L.divIcon({html:'',className:'',iconSize:[1,1]});
+
+const OFFICES = [
+  {name:"Brussels HQ",city:"Brussels",country:"Belgium",lat:50.8503,lng:4.3517,count:99},
+  {name:"Lisbon",city:"Lisbon",country:"Portugal",lat:38.7169,lng:-9.1399,count:61},
+  {name:"Williamsport",city:"Williamsport, PA",country:"USA",lat:41.2412,lng:-77.0011,count:21},
+  {name:"Arlington",city:"Arlington, VA",country:"USA",lat:38.8816,lng:-77.0910,count:45},
+  {name:"Tokyo",city:"Tokyo",country:"Japan",lat:35.6762,lng:139.6503,count:6},
+  {name:"Shanghai",city:"Shanghai",country:"China",lat:31.2304,lng:121.4737,count:11},
+  {name:"Toronto",city:"Toronto",country:"Canada",lat:43.6532,lng:-79.3832,count:13}
+];
+
+function makeOfficeIcon(count) {
+  const w=count>=50?30:count>=20?26:count>=10?24:22;
+  const h=w;
+  const fs=count>=100?11:count>=10?12:13;
+  return L.divIcon({
+    html:`<div style="width:${w}px;height:${h}px;background:#1a1a2e;border:2.5px solid #fff;border-radius:4px;box-shadow:0 2px 8px rgba(26,26,46,0.4);display:flex;align-items:center;justify-content:center;"><span style="color:#fff;font-size:${fs}px;font-family:DM Mono,monospace;font-weight:600;">${count}</span></div>`,
+    className:'',
+    iconSize:[w,h],
+    iconAnchor:[w/2,h],
+    popupAnchor:[0,-h]
+  });
+}
+
+const officeLayerGroup = L.layerGroup();
+OFFICES.forEach(office => {
+  const m = L.marker([office.lat, office.lng], {icon: makeOfficeIcon(office.count||0)});
+  m.bindPopup(`<div class="popup-inner"><div class="popup-city">${office.name}</div><div class="popup-row" style="color:var(--mid);font-size:12px;">${office.country}</div><div style="margin-top:6px"><span class="popup-badge" style="background:#1a1a2e;color:#fff;">Enhesa Office</span><span class="popup-badge" style="background:#1a1a2e;color:#fff;">${office.count} employees</span></div></div>`, {maxWidth:220,minWidth:160});
+  officeLayerGroup.addLayer(m);
+});
+officeLayerGroup.addTo(map);
+
+
+
+
+LOCATIONS.forEach(loc=>{
+  const c=COORDS[loc.city];
+  if(!c)return;
+  const countryLabel = loc.country ? '<div class="popup-row" style="color:var(--mid);font-size:12px;margin-bottom:4px;">' + loc.country + '</div>' : ''; const popup=`<div class="popup-inner"><div class="popup-city">${loc.city}</div>${countryLabel}<div><span class="popup-badge">${loc.count} employee${loc.count!==1?'s':''}</span></div></div>`;
+  const m=L.marker(c,{icon:makeIcon(loc.count)});
+  m.bindPopup(popup,{maxWidth:220,minWidth:160});
+  clusterGroup.addLayer(m);
+  rawGroup.addLayer(m);
+  markers[loc.city]=m;
+  for(let i=1;i<loc.count;i++){
+    const offset=[c[0]+i*0.0001,c[1]+i*0.0001];
+    const ghost=L.marker(offset,{icon:invisibleIcon});
+    ghost.bindPopup(popup,{maxWidth:220,minWidth:160});
+    clusterGroup.addLayer(ghost);
+  }
+});
+map.addLayer(clusterGroup);
+
+let filteredData=[...LOCATIONS];
+const COUNTRY_NAMES = {
+  GBR:"United Kingdom", USA:"United States", PRT:"Portugal", PHL:"Philippines",
+  FRA:"France", ESP:"Spain", IND:"India", BRA:"Brazil", CAN:"Canada", IRL:"Ireland",
+  MEX:"Mexico", RUS:"Russia", SWE:"Sweden", DEU:"Germany", DNK:"Denmark", DOM:"Dominican Republic",
+  EST:"Estonia", FIN:"Finland", ITA:"Italy", KNA:"St Kitts & Nevis", LUX:"Luxembourg",
+  NLD:"Netherlands", UAE:"UAE", POL:"Poland", ROU:"Romania", UKR:"Ukraine",
+  Belgium:"Belgium", Japan:"Japan", China:"China"
+};
+
+function renderSidebar(data, openCountries=null){
+  const list=document.getElementById('city-list');
+  if(!data.length){list.innerHTML='<div class="no-results">No cities found</div>';return;}
+  const groups={};
+  data.forEach(loc=>{
+    const c=loc.country||'GBR';
+    if(!groups[c])groups[c]=[];
+    groups[c].push(loc);
+  });
+  // Sort countries by total employee count descending
+  const sorted=Object.keys(groups).sort((a,b)=>{
+    const totalA=groups[a].reduce((s,l)=>s+l.count,0);
+    const totalB=groups[b].reduce((s,l)=>s+l.count,0);
+    return totalB-totalA;
+  });
+  let html='';
+
+  // Offices section at the top
+  const officesOpen = openCountries ? openCountries.has('__offices__') : false;
+  html+=`<div class="country-header${officesOpen?' open':''}" data-country="__offices__" style="border-top:2px solid var(--accent);">
+    <span>🏢 Enhesa Offices<span class="country-chevron">›</span></span>
+    <span class="country-emp-count">${OFFICES.length}</span>
+  </div>`;
+  html+=`<div class="country-cities${officesOpen?' open':''}" data-country-cities="__offices__">`;
+  [...OFFICES].sort((a,b)=>a.city.localeCompare(b.city)).forEach(office=>{
+    const key='__office__'+office.city;
+    html+=`<div class="city-item${activeCity===key?' active':''}" data-city="${key}" data-lat="${office.lat}" data-lng="${office.lng}" data-name="${office.name}"><div class="city-name">${office.city}</div><div class="city-count" style="background:#1a1a2e;color:#fff;">${office.count}</div></div>`;
+  });
+  html+='</div>';
+
+  sorted.forEach(country=>{
+    const cities=groups[country].sort((a,b)=>a.city.localeCompare(b.city));
+    const total=cities.reduce((s,l)=>s+l.count,0);
+    const isOpen = openCountries ? openCountries.has(country) : false;
+    html+=`<div class="country-header${isOpen?' open':''}" data-country="${country}">
+      <span>${COUNTRY_NAMES[country]||country}<span class="country-chevron">›</span></span>
+      <span class="country-emp-count">${total}</span>
+    </div>`;
+    html+=`<div class="country-cities${isOpen?' open':''}" data-country-cities="${country}">`;
+    cities.forEach(loc=>{
+      html+=`<div class="city-item${activeCity===loc.city?' active':''}" data-city="${loc.city}"><div class="city-name">${loc.city}</div><div class="city-count">${loc.count}</div></div>`;
+    });
+    html+='</div>';
+  });
+  list.innerHTML=html;
+  list.querySelectorAll('.city-item').forEach(el=>el.addEventListener('click',()=>{
+    const city=el.dataset.city;
+    if(city.startsWith('__office__')){
+      if(activeCity===city){
+        activeCity=null;
+        renderSidebar(filteredData, getOpenCountries());
+        map.setView([20,10],2,{animate:true});
+        map.closePopup();
+        return;
+      }
+      activeCity=city;
+      renderSidebar(filteredData, getOpenCountries());
+      const lat=parseFloat(el.dataset.lat);
+      const lng=parseFloat(el.dataset.lng);
+      map.setView([lat,lng],11,{animate:true});
+    } else {
+      focusCity(city);
+    }
+  }));
+  list.querySelectorAll('.country-header').forEach(el=>el.addEventListener('click',()=>{
+    const country=el.dataset.country;
+    el.classList.toggle('open');
+    const citiesEl=list.querySelector('[data-country-cities="'+country+'"]');
+    if(citiesEl)citiesEl.classList.toggle('open');
+  }));
+}
+
+function focusCity(city){
+  if(activeCity===city){
+    // Unclick - reset to world view
+    activeCity=null;
+    renderSidebar(filteredData, getOpenCountries());
+    map.setView([20,10],2,{animate:true});
+    map.closePopup();
+    return;
+  }
+  activeCity=city;
+  renderSidebar(filteredData, getOpenCountries());
+  const c=COORDS[city];
+  if(!c)return;
+  map.setView(c,11,{animate:true});
+  const m=markers[city];
+  if(m){if(clustered)clusterGroup.zoomToShowLayer(m,()=>m.openPopup());else m.openPopup();}
+}
+
+renderSidebar(LOCATIONS, getOpenCountries());
+
+function getOpenCountries(){
+  const list=document.getElementById('city-list');
+  const open=new Set();
+  list.querySelectorAll('.country-header.open').forEach(el=>open.add(el.dataset.country));
+  return open;
+}
+
+document.getElementById('search').addEventListener('input',function(){
+  const q=this.value.toLowerCase().trim();
+  filteredData=LOCATIONS.filter(l=>l.city.toLowerCase().includes(q));
+  activeCity=null;
+  renderSidebar(filteredData, getOpenCountries());
+  const total=filteredData.reduce((s,l)=>s+l.count,0);
+  document.getElementById('stat').textContent=`${filteredData.length} cities · ${total} employees`;
+});
+
+document.getElementById('toggle-cluster').addEventListener('click',function(){
+  clustered=!clustered;
+  this.textContent=clustered?'Uncluster':'Cluster';
+  this.classList.toggle('active',!clustered);
+  if(clustered){map.removeLayer(rawGroup);map.addLayer(clusterGroup);}
+  else{map.removeLayer(clusterGroup);map.addLayer(rawGroup);}
+});
+
+document.getElementById('reset-btn').addEventListener('click',()=>{
+  map.setView([20,10],2,{animate:true});
+  activeCity=null;
+  document.getElementById('search').value='';
+  filteredData=[...LOCATIONS];
+  renderSidebar(filteredData, getOpenCountries());
+  document.getElementById('stat').textContent='203 cities · 258 employees';
+});
+</script>
+</body>
+</html>
