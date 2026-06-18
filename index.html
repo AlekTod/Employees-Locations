@@ -408,13 +408,25 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
 function makeIcon(count) {
   const s = count>3?36:count>1?30:26;
   return L.divIcon({
-    html:`<div style="width:${s}px;height:${s}px;background:#e84855;border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(232,72,85,0.35);display:flex;align-items:center;justify-content:center;">${count>1?`<span style="transform:rotate(45deg);color:#fff;font-size:10px;font-family:'DM Mono',monospace;font-weight:600;">${count}</span>`:''}</div>`,
+    html:`<div style="width:${s}px;height:${s}px;background:#e84855;border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(232,72,85,0.35);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(45deg);color:#fff;font-size:10px;font-family:'DM Mono',monospace;font-weight:600;">${count}</span></div>`,
     className:'',iconSize:[s,s],iconAnchor:[s/2,s],popupAnchor:[0,-s]
   });
 }
 
 let clustered=true;
-const clusterGroup=L.markerClusterGroup({maxClusterRadius:80,showCoverageOnHover:false});
+const clusterGroup=L.markerClusterGroup({
+  maxClusterRadius:80,
+  showCoverageOnHover:false,
+  iconCreateFunction: function(cluster){
+    const count = cluster.getChildCount();
+    const size = count >= 50 ? 52 : count >= 20 ? 44 : count >= 10 ? 38 : count >= 5 ? 32 : 26;
+    return L.divIcon({
+      html: '<div style="width:'+size+'px;height:'+size+'px;background:rgba(91,76,219,0.85);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-family:DM Mono,monospace;font-weight:600;font-size:'+(size>38?13:11)+'px;box-shadow:0 2px 8px rgba(91,76,219,0.4);">'+count+'</div>',
+      className: '',
+      iconSize: [size, size]
+    });
+  }
+});
 const rawGroup=L.layerGroup();
 const markers={};
 let activeCity=null;
