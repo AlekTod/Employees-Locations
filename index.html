@@ -496,8 +496,12 @@ function renderSidebar(data, openCountries=null){
     if(!groups[c])groups[c]=[];
     groups[c].push(loc);
   });
-  // Sort all countries alphabetically
-  const sorted=Object.keys(groups).sort((a,b)=>(COUNTRY_NAMES[a]||a).localeCompare(COUNTRY_NAMES[b]||b));
+  // Sort countries by total employee count descending
+  const sorted=Object.keys(groups).sort((a,b)=>{
+    const totalA=groups[a].reduce((s,l)=>s+l.count,0);
+    const totalB=groups[b].reduce((s,l)=>s+l.count,0);
+    return totalB-totalA;
+  });
   let html='';
 
   // Offices section at the top
